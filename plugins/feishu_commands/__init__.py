@@ -113,9 +113,13 @@ def _patch_feishu_adapter() -> None:
 
         if action_value.get('hermes_action') == 'slash_confirm':
             logger.info("[feishu-commands] Intercepting slash_confirm action")
+            # Extract chat_id from the card event context so we can send
+            # the result message back to the user.
+            context = getattr(event, 'context', None)
+            chat_id = str(getattr(context, 'open_chat_id', '') or '')
             if loop and not getattr(loop, 'is_closed', lambda: False)():
                 asyncio.run_coroutine_threadsafe(
-                    _resolve_slash_confirm(action_value),
+                    _resolve_slash_confirm(action_value, chat_id=chat_id),
                     loop,
                 )
             # Return a response to keep the Feishu SDK happy
@@ -131,8 +135,11 @@ def _patch_feishu_adapter() -> None:
     _PATCHED = True
 
 
-async def _resolve_slash_confirm(action_value: dict) -> None:
-    """Resolve a pending slash confirm from a button callback."""
+async def _resolve_slash_confirm(action_value: dict, *, chat_id: str = '') -> None:
+    """Resolve a pending slash confirm from a button callback.
+
+    Sends the handler's result message back to the Feishu chat.
+    """
     from tools.slash_confirm import resolve
     confirm_id = action_value.get('confirm_id', '')
     session_key = action_value.get('session_key', '')
@@ -140,14 +147,36 @@ async def _resolve_slash_confirm(action_value: dict) -> None:
     if not all([confirm_id, session_key, choice]):
         logger.warning("[feishu-commands] Incomplete slash_confirm data: %s", action_value)
         return
+
+    result_msg = None
     try:
-        result = await resolve(session_key, confirm_id, choice)
+        result_msg = await resolve(session_key, confirm_id, choice)
         logger.info(
             "[feishu-commands] Slash confirm %s/%s → %s",
             session_key, confirm_id, choice,
         )
     except Exception as exc:
         logger.error("[feishu-commands] Slash confirm resolution failed: %s", exc)
+        result_msg = f"❌ Error resolving confirmation: {exc}"
+
+    # Send the handler's result back to the user
+    if result_msg and chat_id:
+        try:
+            token = _get_tenant_token()
+            _send_feishu_text(chat_id, result_msg, token)
+            logger.info(
+                "[feishu-commands] Sent slash-confirm result to %s: %r",
+                chat_id, result_msg[:100],
+            )
+        except Exception as exc:
+            logger.error(
+                "[feishu-commands] Failed to send slash-confirm result: %s", exc,
+            )
+    elif result_msg and not chat_id:
+        logger.warning(
+            "[feishu-commands] No chat_id available, cannot deliver result: %r",
+            result_msg[:100],
+        )
 
 
 def _make_send_result(success: bool, error: str, message_id: str = '') -> object:
