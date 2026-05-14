@@ -1,0 +1,10 @@
+name: feishu_commands
+version: 1.0.0
+description: "Send Feishu interactive cards with buttons for slash commands — click instead of typing."
+author: User
+kind: backend
+requires_env:
+  - FEISHU_APP_ID
+  - FEISHU_APP_SECRET
+provides_tools:
+  - feishu_show_buttons
