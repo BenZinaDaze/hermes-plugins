@@ -9,7 +9,7 @@ description: "Send Feishu interactive cards with clickable command buttons, and 
 
 The `feishu_commands` plugin registers the **`feishu_show_buttons`** tool, which sends interactive Feishu card messages with buttons the user can click instead of typing.
 
-Full source reference in `references/plugin-source.md`.
+Full source reference in `references/plugin-source.md`. For a comprehensive overview of all Feishu capabilities (gateway approval cards, document toolsets, format constraints, and this plugin), see `references/feishu-capabilities.md`.
 
 Reference GitHub repo at `/root/hermes-plugins/` — structured for multiple plugins/skills under one roof:
 
@@ -123,6 +123,29 @@ plugins:
   enabled:
     - feishu_commands
 ```
+
+## Feishu Markdown Sanitizer (Auto-Format Fix)
+
+The plugin **monkey-patches `FeishuAdapter.format_message()`** to automatically
+strip or convert markdown that Feishu doesn't render. No model instruction needed
+— it runs at the gateway level before any message is sent.
+
+### What gets fixed
+
+- **Headings** (`# Title`, `## Subtitle`) → converted to `**Title**`
+- **Horizontal rules** (`---`, `***`) → removed
+- **Table rows** (lines containing `|`) → entire row removed
+
+### What's preserved
+
+- `**bold**`, `` `code` ``, `[links](url)`, lists, code blocks
+- Interactive card payloads (separate API path, not affected)
+
+### Implementation
+
+The sanitizer lives in `_sanitize_for_feishu()` inside the plugin's `__init__.py`.
+It wraps the original `format_message()` so the existing whitespace-strip
+behavior is preserved.
 
 ## Env Requirements
 
