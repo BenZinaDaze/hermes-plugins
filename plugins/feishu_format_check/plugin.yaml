@@ -1,0 +1,4 @@
+name: feishu_format_check
+version: "1.0"
+min_hermes_version: "0.1.0"
+description: Auto-fix LLM output format for Feishu compatibility (headings, tables, horizontal rules, blockquotes)
