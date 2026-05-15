@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # ── Regex patterns ──────────────────────────────────────────────────────
 
 _HEADING_RE = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)
-_TABLE_SEP_RE = re.compile(r"^[\|\s]*:?-{3,}:?[\s\|:]*$", re.MULTILINE)
+_TABLE_SEP_RE = re.compile(r"^[\s|:]*[-]{3}[\s|:-]*$", re.MULTILINE)
 _HR_RE = re.compile(r"^[-*_]{3,}\s*$", re.MULTILINE)
 _BLOCKQUOTE_RE = re.compile(r"^>\s+(.+)$", re.MULTILINE)
 
