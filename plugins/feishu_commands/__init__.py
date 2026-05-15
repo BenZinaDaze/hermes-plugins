@@ -11,6 +11,43 @@ import time
 import urllib.error
 import urllib.request
 
+# ── Feishu Markdown Sanitizer ────────────────────────────────────────────
+# Converts table/heading/horizontal-rule markdown to Feishu-compatible
+# formats. Only applied to TEXT/POST messages, not interactive cards.
+
+_FEISHU_HEADING_RE = re.compile(r'^ {0,3}#{1,6}\s+(.*)$', re.MULTILINE)
+_FEISHU_HR_RE = re.compile(r'^ {0,3}(?:[-*_]){3,}\s*$', re.MULTILINE)
+_FEISHU_TABLE_LINE_RE = re.compile(r'^.*?\|.*$', re.MULTILINE)
+
+
+def _sanitize_for_feishu(text: str) -> str:
+    """Strip or convert markdown elements Feishu doesn't render.
+
+    - Headings (# → **bold**)
+    - Horizontal rules (--- / *** / ___) → removed
+    - Table rows (|...|) → removed entirely (header + separator + data)
+    """
+    if not text:
+        return text
+
+    # 1. Convert headings to bold
+    #    "# Title" → "**Title**"
+    text = _FEISHU_HEADING_RE.sub(r'**\1**', text)
+
+    # 2. Remove horizontal rules (replace with empty line, preserving spacing)
+    text = _FEISHU_HR_RE.sub('', text)
+
+    # 3. Remove table rows entirely
+    #    This catches both header rows (| A | B |), separator rows (|---|---|),
+    #    and data rows.  Each row is removed individually so adjacent text
+    #    survives.
+    text = _FEISHU_TABLE_LINE_RE.sub('', text)
+
+    # 4. Clean up excessive blank lines left by removals
+    text = re.sub(r'\n{3,}', '\n\n', text)
+
+    return text.strip()
+
 logger = logging.getLogger(__name__)
 
 _CARD_BUTTON_RE = re.compile(
@@ -129,9 +166,18 @@ def _patch_feishu_adapter() -> None:
 
     FeishuAdapter.send_slash_confirm = _send_slash_confirm
     FeishuAdapter._on_card_action_trigger = _patched_on_card_action_trigger
+
+    # ── format_message sanitizer patch ──────────────────────────────────
+    original_format = FeishuAdapter.format_message
+
+    def _patched_format_message(self, content: str) -> str:
+        text = original_format(self, content)
+        return _sanitize_for_feishu(text)
+
+    FeishuAdapter.format_message = _patched_format_message
     FeishuAdapter._feishu_commands_patched = True
 
-    logger.info("[feishu-commands] Patched FeishuAdapter: send_slash_confirm + card action handler")
+    logger.info("[feishu-commands] Patched FeishuAdapter: send_slash_confirm + card action handler + format_message")
     _PATCHED = True
 
 
