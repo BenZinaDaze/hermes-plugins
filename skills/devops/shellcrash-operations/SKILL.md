@@ -1,7 +1,8 @@
 ---
 name: shellcrash-operations
 title: ShellCrash 日常运维操作
-description: ShellCrash 日常操作命令速查 — 开关服务、切换模式、代理组切换、测速、查状态
+description: ShellCrash (juewuy/ShellCrash) 日常操作命令速查 — mihomo 内核，开关服务、切换模式、代理组切换、测速、查状态
+project: https://github.com/juewuy/ShellCrash
 triggers:
   - shellcrash restart
   - shellcrash status
