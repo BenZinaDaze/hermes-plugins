@@ -60,3 +60,13 @@ Interactive elements:
 - 首次启动会下载 Chrome 二进制（~200MB，缓存到 `~/.cloakbrowser/`）
 - 每个会话 ID 独立管理浏览器实例
 - 使用完调用 `browser_close()` 释放资源
+
+## 调试记录
+
+### v1.1 — 工具注册顺序修复
+
+**问题：** 插件注册的 9 个 browser 工具在 gateway 启动后不可见，只有 `browser_close` 可用。
+
+**根因：** 插件 `register()` 在 gateway 启动时先执行，注册了所有工具。但 `discover_builtin_tools()` 在第一个请求到来时（`model_tools` lazy import）才运行，用 `check_browser_requirements`（返回 False）覆盖了插件注册的 ToolEntry。
+
+**修复：** `register()` 开头主动 `import model_tools`，强制 `discover_builtin_tools()` 先完成，插件再注册，确保 `_check_cloak_requirements` 是最终有效的 check_fn。
