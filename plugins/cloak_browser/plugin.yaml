@@ -1,0 +1,4 @@
+name: cloak_browser
+version: "1.0"
+min_hermes_version: "0.1.0"
+description: "CloakBrowser-based stealth browser automation - patched Chromium with C++ source-level fingerprint fixes"
