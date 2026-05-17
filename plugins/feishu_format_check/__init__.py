@@ -13,12 +13,41 @@ What it does:
 - Only applies when the platform is 'feishu'
 - Logs a warning when violations are found
 - Passes through unchanged for all other platforms
+
+Supports toggle via /feishu-format-check-enable and /feishu-format-check-disable
+slash commands (or card buttons).
 """
 
+import json
 import logging
+import os
 import re
 
 logger = logging.getLogger(__name__)
+
+# ── Toggle state ──────────────────────────────────────────────────────────
+
+_STATE_FILE = os.path.join(os.path.expanduser("~"), ".hermes", "feishu_format_check_state.json")
+
+
+def _load_state() -> bool:
+    """Load enabled state. Default: enabled (True)."""
+    try:
+        with open(_STATE_FILE) as f:
+            state = json.load(f)
+        return state.get("enabled", True)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return True
+
+
+def _save_state(enabled: bool) -> None:
+    os.makedirs(os.path.dirname(_STATE_FILE), exist_ok=True)
+    with open(_STATE_FILE, "w") as f:
+        json.dump({"enabled": enabled}, f)
+
+
+_ENABLED = _load_state()
+
 
 # ── Regex patterns ──────────────────────────────────────────────────────
 
@@ -128,6 +157,8 @@ def _hook_transform_llm_output(
         return None
     if platform != "feishu":
         return None
+    if not _ENABLED:
+        return None
 
     violations = _check_violations(response_text)
     if not violations:
@@ -151,8 +182,42 @@ def _hook_transform_llm_output(
     return transformed
 
 
+# ── Command handlers ────────────────────────────────────────────────────
+
+def _handle_format_enable(args: list[str] = None) -> str:
+    """Enable Feishu format checking."""
+    global _ENABLED
+    _ENABLED = True
+    _save_state(True)
+    logger.info("[feishu-format-check] Enabled")
+    return "✅ Feishu 格式检查已启用"
+
+
+def _handle_format_disable(args: list[str] = None) -> str:
+    """Disable Feishu format checking."""
+    global _ENABLED
+    _ENABLED = False
+    _save_state(False)
+    logger.info("[feishu-format-check] Disabled")
+    return "⛔ Feishu 格式检查已关闭"
+
+
 # ── Plugin registration ────────────────────────────────────────────────
 
 def register(ctx) -> None:
     ctx.register_hook("transform_llm_output", _hook_transform_llm_output)
-    logger.info("[feishu-format-check] Hook registered — will auto-fix Feishu format violations")
+    ctx.register_command(
+        "feishu-format-check-enable",
+        _handle_format_enable,
+        description="Enable Feishu format auto-check",
+    )
+    ctx.register_command(
+        "feishu-format-check-disable",
+        _handle_format_disable,
+        description="Disable Feishu format auto-check",
+    )
+    logger.info(
+        "[feishu-format-check] Hook + commands registered "
+        "(current state: %s)",
+        "enabled" if _ENABLED else "disabled",
+    )

@@ -248,7 +248,13 @@ def _make_p2_card_response() -> object | None:
 # ── pre_gateway_dispatch hook ──────────────────────────────────────────
 
 def _hook_pre_gateway_dispatch(*, event, **_kw) -> None | dict:
-    """Intercept /card button clickbacks and rewrite to the target command."""
+    """Intercept /card button clickbacks and rewrite to the target command.
+
+    - If the target is a known gateway command (/restart, /stop, etc.):
+      keep the leading / and rewrite as a command.
+    - Otherwise: strip any leading / so the text goes to the agent as a
+      regular user message, not an "Unknown command" rejection.
+    """
     text = (event.text or "").strip()
     m = _CARD_BUTTON_RE.match(text)
     if not m:
@@ -259,16 +265,21 @@ def _hook_pre_gateway_dispatch(*, event, **_kw) -> None | dict:
         logger.warning("[feishu-commands] Failed to parse card button payload: %r", text)
         return None
 
-    # Slash-confirm callbacks handled by _on_card_action_trigger patch
-    if payload.get("hermes_action") == "slash_confirm":
-        return {"action": "skip", "reason": "handled by slash_confirm card action handler"}
-
     clicked: str | None = payload.get("hermes_clicked") or payload.get("command")
     if not clicked:
         logger.warning("[feishu-commands] Card button payload missing hermes_clicked: %r", payload)
         return None
-    if not clicked.startswith("/"):
-        clicked = "/" + clicked.lstrip()
+
+    # Only keep / prefix for known gateway commands; otherwise strip it
+    # so the text reaches the agent as a normal user message.
+    if clicked.startswith("/"):
+        cmd_name = clicked.lstrip("/").split(maxsplit=1)[0]
+        try:
+            from hermes_cli.commands import is_gateway_known_command
+            if not is_gateway_known_command(cmd_name.replace("_", "-")):
+                clicked = clicked.lstrip("/").lstrip()
+        except Exception:
+            clicked = clicked.lstrip("/").lstrip()
 
     logger.info(
         "[feishu-commands] Rewriting card button click %r → %r",
