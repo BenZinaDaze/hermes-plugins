@@ -1,20 +1,22 @@
 from __future__ import annotations
 
+
 """CloakBrowser Plugin - Stealth browser automation via CloakBrowser.
 
-Registers cloak_* browser tools that use CloakBrowser's patched Chromium
-binary (C++ source-level fingerprint patches) instead of stock Playwright.
+Overrides core browser_* tools with CloakBrowser-backed versions that
+use C++ source-level fingerprint patches instead of stock Playwright.
 
-Toolset: cloak_browser
+Registers same tool names (browser_navigate, browser_click, etc.) in the
+'browser' toolset, overwriting the core implementations.
 
-Enable with: hermes tools enable cloak_browser
+To revert: remove this plugin and restart the gateway.
 """
 
 import json
 import logging
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +42,6 @@ def _get_or_create_browser(task_id: str) -> Any:
 def _get_page(task_id: str) -> Any:
     """Get or create a page for the given browser session."""
     browser = _get_or_create_browser(task_id)
-    # Reuse existing page if available
     if browser.contexts:
         for ctx in browser.contexts:
             if ctx.pages:
@@ -73,8 +74,6 @@ def _handle_navigate(args: dict, **kw) -> str:
         time.sleep(0.5)
 
         title = page.title()
-
-        # Build a compact snapshot of interactive elements
         elements = _get_interactive_elements(page)
         snapshot = _build_snapshot_text(title, url, elements)
 
@@ -204,10 +203,10 @@ def _handle_close(args: dict, **kw) -> str:
 def _handle_vision(args: dict, **kw) -> str:
     """Take a screenshot and return path."""
     task_id = kw.get("task_id", "default")
-    question = args.get("question", "")
     try:
         page = _get_page(task_id)
-        screenshot_path = f"/tmp/cloak_screenshot_{task_id.replace('/', '_')}.png"
+        safe_id = task_id.replace("/", "_").replace(":", "_")
+        screenshot_path = f"/tmp/cloak_screenshot_{safe_id}.png"
         page.screenshot(path=screenshot_path, full_page=False)
         return json.dumps({
             "success": True,
@@ -310,7 +309,7 @@ def _build_snapshot_text(title: str, url: str, elements: list) -> str:
             parts.append(f'[placeholder="{place}"]')
         if href:
             short = href[:80]
-            parts.append(f"→ {short}")
+            parts.append(f"\u2192 {short}")
         parts.append(">")
         lines.append("  " + " ".join(parts))
 
@@ -321,40 +320,37 @@ def _build_snapshot_text(title: str, url: str, elements: list) -> str:
 # Plugin registration
 # ---------------------------------------------------------------------------
 
-def check_cloak_requirements() -> bool:
-    """Check if CloakBrowser is available."""
+def _check_cloak_requirements() -> bool:
+    """Check if CloakBrowser binary is available."""
     try:
         from cloakbrowser.download import ensure_binary
-        ensure_binary()
-        return True
+        path = ensure_binary()
+        return bool(path)
     except Exception:
         return False
 
 
-_SCHEMAS = [
+SCHEMAS = [
     {
-        "name": "cloak_navigate",
-        "description": "Navigate to a URL using CloakBrowser (stealth Chromium). Initializes the session and loads the page. Must be called before other cloak_* tools. Returns a compact page snapshot with interactive elements and ref IDs. Use this instead of browser_navigate when you need anti-detection/stealth (bypass Cloudflare, reCAPTCHA, bot detection).",
+        "name": "browser_navigate",
+        "description": "Navigate to a URL in the browser using CloakBrowser (stealth Chromium). Initializes the session and loads the page. Must be called before other browser tools. Returns a compact page snapshot with interactive elements and ref IDs. Overrides the default browser_navigate with anti-detection stealth (bypasses Cloudflare, reCAPTCHA, bot detection).",
         "parameters": {
             "type": "object",
             "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "The URL to navigate to"
-                }
+                "url": {"type": "string", "description": "The URL to navigate to"}
             },
             "required": ["url"]
         }
     },
     {
-        "name": "cloak_snapshot",
-        "description": "Get a text-based snapshot of the current page via CloakBrowser. Returns interactive elements with ref IDs (@e1, @e2) for cloak_click and cloak_type. full=false (default): compact view. full=true: complete page text content.",
+        "name": "browser_snapshot",
+        "description": "Get a text-based snapshot of the current page via CloakBrowser. Returns interactive elements with ref IDs (@e1, @e2) for browser_click and browser_type. full=false (default): compact view. full=true: complete page text content.",
         "parameters": {
             "type": "object",
             "properties": {
                 "full": {
                     "type": "boolean",
-                    "description": "If true, returns full page text content",
+                    "description": "If true, returns full page content. If false (default), compact view.",
                     "default": False
                 }
             },
@@ -362,40 +358,31 @@ _SCHEMAS = [
         }
     },
     {
-        "name": "cloak_click",
-        "description": "Click on an element identified by its ref ID (@e5) via CloakBrowser stealth browser.",
+        "name": "browser_click",
+        "description": "Click on an element by ref ID (@e5) via CloakBrowser stealth browser.",
         "parameters": {
             "type": "object",
             "properties": {
-                "ref": {
-                    "type": "string",
-                    "description": "The element reference from the snapshot (e.g., '@e5', '@e12')"
-                }
+                "ref": {"type": "string", "description": "Element ref from snapshot (e.g. '@e5')"}
             },
             "required": ["ref"]
         }
     },
     {
-        "name": "cloak_type",
-        "description": "Type text into an input field identified by its ref ID via CloakBrowser.",
+        "name": "browser_type",
+        "description": "Type text into an input field by ref ID via CloakBrowser. Clears field first, then types.",
         "parameters": {
             "type": "object",
             "properties": {
-                "ref": {
-                    "type": "string",
-                    "description": "The element reference from the snapshot (e.g., '@e3')"
-                },
-                "text": {
-                    "type": "string",
-                    "description": "The text to type into the field"
-                }
+                "ref": {"type": "string", "description": "Element ref from snapshot (e.g. '@e3')"},
+                "text": {"type": "string", "description": "Text to type"}
             },
             "required": ["ref", "text"]
         }
     },
     {
-        "name": "cloak_scroll",
-        "description": "Scroll the page in a direction.",
+        "name": "browser_scroll",
+        "description": "Scroll the page in a direction via CloakBrowser.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -409,78 +396,86 @@ _SCHEMAS = [
         }
     },
     {
-        "name": "cloak_back",
-        "description": "Navigate back to the previous page in browser history.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
+        "name": "browser_back",
+        "description": "Navigate back to the previous page in browser history via CloakBrowser.",
+        "parameters": {"type": "object", "properties": {}, "required": []}
     },
     {
-        "name": "cloak_press",
+        "name": "browser_press",
         "description": "Press a keyboard key. Useful for submitting forms (Enter), navigating (Tab), or keyboard shortcuts.",
         "parameters": {
             "type": "object",
             "properties": {
-                "key": {
-                    "type": "string",
-                    "description": "Key to press (e.g., 'Enter', 'Tab', 'Escape', 'ArrowDown')"
-                }
+                "key": {"type": "string", "description": "Key to press (e.g. 'Enter', 'Tab', 'Escape')"}
             },
             "required": ["key"]
         }
     },
     {
-        "name": "cloak_vision",
-        "description": "Take a screenshot of the current page. Returns a screenshot_path you can share with the user by including MEDIA:<screenshot_path> in your response.",
+        "name": "browser_vision",
+        "description": "Take a screenshot of the current page via CloakBrowser and return the path.",
         "parameters": {
             "type": "object",
             "properties": {
-                "question": {
-                    "type": "string",
-                    "description": "What you want to know about the page visually"
-                }
+                "question": {"type": "string", "description": "What you want to know about the page visually"}
             },
             "required": ["question"]
         }
     },
     {
-        "name": "cloak_close",
-        "description": "Close the CloakBrowser session. Call this when done to free resources.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
+        "name": "browser_close",
+        "description": "Close the browser session via CloakBrowser. Call when done to free resources.",
+        "parameters": {"type": "object", "properties": {}, "required": []}
     },
 ]
 
 _HANDLERS = {
-    "cloak_navigate": _handle_navigate,
-    "cloak_snapshot": _handle_snapshot,
-    "cloak_click": _handle_click,
-    "cloak_type": _handle_type,
-    "cloak_scroll": _handle_scroll,
-    "cloak_back": _handle_back,
-    "cloak_press": _handle_press,
-    "cloak_vision": _handle_vision,
-    "cloak_close": _handle_close,
+    "browser_navigate": _handle_navigate,
+    "browser_snapshot": _handle_snapshot,
+    "browser_click": _handle_click,
+    "browser_type": _handle_type,
+    "browser_scroll": _handle_scroll,
+    "browser_back": _handle_back,
+    "browser_press": _handle_press,
+    "browser_vision": _handle_vision,
+    "browser_close": _handle_close,
 }
 
 
 def register(ctx) -> None:
-    """Register CloakBrowser tools with Hermes."""
-    for schema in _SCHEMAS:
+    """Register CloakBrowser tools, overwriting core browser_* tools.
+
+    IMPORTANT: import model_tools FIRST to trigger discover_builtin_tools().
+    Core browser_tool.py registers all browser_* tools at import time with
+    check_fn=check_browser_requirements (which returns False in environments
+    without Playwright). If model_tools/discover_builtin_tools runs AFTER
+    plugin registration, it overwrites our _check_cloak_requirements on the
+    ToolEntry. Importing model_tools here forces discover_builtin_tools to
+    run first, so our registration below takes precedence.
+    """
+    # Force core browser tool discovery before we register. This is safe
+    # because model_tools is imported lazily per-request by the gateway;
+    # importing it here just makes the first request faster.
+    import model_tools  # noqa: F401
+
+    for schema in SCHEMAS:
         name = schema["name"]
         ctx.register_tool(
             name=name,
-            toolset="cloak_browser",
+            toolset="browser",
             schema=schema,
             handler=_HANDLERS[name],
-            check_fn=check_cloak_requirements,
+            check_fn=_check_cloak_requirements,
             description=schema["description"],
-            emoji="🕵️",
+            emoji="\U0001F575\uFE0F",
         )
 
-    logger.info("CloakBrowser plugin loaded: %d tools registered", len(_SCHEMAS))
+    # Overwrite the toolset-level check so core check_browser_requirements
+    # doesn't block our overwritten tools. Core browser_tool.py sets this
+    # to check_browser_requirements (Playwright Chromium check) during
+    # discover_builtin_tools(); replacing it with a pass-through ensures
+    # all cloak_browser tools are visible on every platform.
+    from tools.registry import registry
+    registry._toolset_checks["browser"] = lambda: True
+
+    logger.info("CloakBrowser plugin: overwrote %d browser_* tools", len(SCHEMAS))
