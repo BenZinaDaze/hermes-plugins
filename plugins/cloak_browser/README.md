@@ -2,7 +2,7 @@
 
 ## 简介
 
-`cloak_browser` 是一个基于 [CloakBrowser](https://cloakbrowser.dev/) 的 stealth 浏览器自动化插件，用 C++ 源码级别的指纹修复替代了默认的 Playwright。
+`cloak_browser` 是一个基于 [CloakBrowser](https://github.com/CloakHQ/CloakBrowser) 的 stealth 浏览器自动化插件，用 C++ 源码级别的指纹修复替代了默认的 Playwright。
 
 核心优势：
 - **绕过 Cloudflare / reCAPTCHA / 各种 bot 检测**
