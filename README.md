@@ -68,9 +68,9 @@ AI 助手调用 `feishu_show_buttons` 工具发送卡片，用户点击按钮即
 
 ---
 
-### cloak_browser — 隐身浏览器自动化（未启用，需 API key）
+### cloak_browser — 隐身浏览器自动化（需 API key）
 
-基于 [CloakBrowser](https://github.com/nousresearch/cloak-browser) 的隐身浏览器插件，绕过 Cloudflare、reCAPTCHA 等 bot 检测。需要配置 `CLOAK_BROWSER_API_KEY` 并安装后才可使用。目前该插件尚未启用。
+基于 [CloakBrowser](https://github.com/nousresearch/cloak-browser) 的隐身浏览器插件，绕过 Cloudflare、reCAPTCHA 等 bot 检测。需要配置 `CLOAK_BROWSER_API_KEY` 才能正常工作。
 
 **安装：**
 
