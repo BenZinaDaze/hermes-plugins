@@ -14,9 +14,13 @@ hermes-plugins/
 │   ├── cloak_browser/        — 隐身浏览器自动化
 │   └── feishu_format_check/  — 飞书格式净化
 └── skills/
-    ├── feishu-buttons/                   — 飞书按钮卡片技能
-    ├── cloak-browser/                    — CloakBrowser 使用指南
-    └── devops/shellcrash-operations/     — ShellCrash 日常运维
+    ├── cloak-browser/              — CloakBrowser 使用指南
+    ├── feishu-buttons/             — 飞书按钮卡片技能
+    ├── devops/shellcrash-operations/  — ShellCrash 日常运维
+    ├── hermes-agent/
+    │   └── memory-management/      — Hermes 内存管理
+    └── messaging/
+        └── lark-cli/               — 飞书文档 CLI 操作
 ```
 
 ## 插件列表
@@ -135,6 +139,14 @@ CloakBrowser 技能文档，涵盖浏览器导航、点击、截图等操作的�
 ### shellcrash-operations
 
 ShellCrash 日常运维命令速查：服务管理、模式切换、API 代理组切换、节点测速、故障诊断。
+
+### memory-management
+
+Hermes Agent 持久化内存管理 — 审查、合并、裁剪 memory 条目，保持在字符限制内。
+
+### lark-cli
+
+飞书官方 CLI 工具 ([@larksuite/cli](https://github.com/larksuite/cli)) 的安装、认证和文档操作指南。支持通过 v2 API 创建、读取、更新、删除飞书文档，替代裸调 Feishu Open API。
 
 ---
 
