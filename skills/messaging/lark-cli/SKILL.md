@@ -62,20 +62,22 @@ lark-cli auth status --verify
 | 删除机器人创建的文档 | `--as bot` | 机器人创建者才有删除权限 |
 | 不确定时 | 先 `--as user`，403 换 `--as bot` | 安全降级 |
 
-## 文档操作命令
+## 文档操作命令（v2 API）
 
 ### 创建文档
 
 ```
 cat content.md | lark-cli docs +create \
   --title "文档标题" \
-  --markdown - \
-  --as user
+  --content - \
+  --doc-format markdown \
+  --as user \
+  --api-version v2
 ```
 
 - 标题必填
-- markdown 内容从 stdin 传入（lark-cli 不支持绝对路径 `--markdown`）
-- 返回 `doc_id` 和 `doc_url`
+- markdown 内容从 stdin 传入（不支持绝对路径）
+- 返回 `document_id` 和 `url`
 
 ### 读取文档内容
 
@@ -83,28 +85,33 @@ cat content.md | lark-cli docs +create \
 lark-cli docs +fetch \
   --doc "https://www.feishu.cn/docx/<doc_id>" \
   --as user \
+  --api-version v2 \
+  --doc-format markdown \
   --format pretty
 ```
 
-- `--format pretty` 输出 markdown 文本
-- `--format json` 输出原始 JSON（含 block 结构）
-- 支持 `--scope outline` 只看标题大纲
+- `--doc-format markdown --format pretty` 输出 markdown 文本（v2 会正确渲染代码块）
+- `--doc-format xml` 输出 XML 格式（含 block 结构）
+- `--scope outline` 只看标题大纲
+- `--revision-id <N>` 读取指定版本
 
 ### 更新文档
 
 ```
 cat content.md | lark-cli docs +update \
   --doc "https://www.feishu.cn/docx/<doc_id>" \
-  --mode overwrite \
-  --markdown - \
-  --new-title "新标题（可选）" \
-  --as user
+  --command overwrite \
+  --content - \
+  --doc-format markdown \
+  --as user \
+  --api-version v2
 ```
 
-- `--mode overwrite` — 完全替换内容
-- `--mode append` — 追加到末尾
-- `--markdown -` — 内容从 stdin 传入
-- 可选 `--new-title` 同时修改标题
+- `--command overwrite` — 完全替换内容
+- `--command append` — 追加到末尾
+- `--content -` — 内容从 stdin 传入
+- `--doc-format markdown` — 内容为 markdown 格式
+- `--revision-id -1`（默认）— 基于最新版本编辑
 
 ### 删除文档
 
@@ -127,15 +134,12 @@ lark-cli drive +delete \
 
 ## 注意事项 / Pitfalls
 
-1. **markdown 路径限制：** `--markdown` 不支持绝对路径（如 `/tmp/file.md`）。必须用相对路径或 stdin 传参：`cat file.md | lark-cli ... --markdown -`
+1. **markdown 内容传入：** `--content` 不支持绝对路径。用 stdin：`cat file.md | lark-cli ... --content -`
 
-2. **v1 API 已弃用：** lark-cli 的 `docs +create/+fetch/+update` 默认用 v1 API（输出 deprecation 警告）。但 v2 API 需要确认 skill 已更新。更新命令：
-   ```
-   lark-cli update
-   ```
+2. **v2 API 必须显式指定：** 所有 `docs` 命令记得加 `--api-version v2`，否则默认 v1（有 deprecation 警告且代码块渲染有问题）。
 
-3. **markdown 代码块渲染差异：** lark-cli 的 markdown 转换 对 ```bash 代码块支持有限，注意检查最终文档的代码块是否渲染正确。
+3. **并发限制：** 飞书文档 API 每秒 3 QPS（单应用），单文档每秒 3 次并发编辑。批量操作需加延迟。
 
-4. **并发限制：** 飞书文档 API 每秒 3 QPS（单应用），单文档每秒 3 次并发编辑。批量操作需加延迟。
+4. **`--as bot` vs `--as user`：** 文档由谁创建，就用谁的身份操作。不确定时先 user 再 bot。如果 user 403 则换 bot。
 
-5. **`--as bot` vs `--as user`：** 这是最常见的坑。文档由谁创建，就用谁的身份操作。不确定时先 user 再 bot。
+5. **v2 +update 没有 `--new-title`：** v1 支持 `--new-title` 同时改标题，v2 不支持。需要改标题的话，用 `lark-cli api` 单独调接口。
